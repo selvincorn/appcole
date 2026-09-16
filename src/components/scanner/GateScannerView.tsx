@@ -13,7 +13,8 @@ import {
   LogOut, 
   UserCheck, 
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 
 interface GateScannerViewProps {
@@ -27,6 +28,7 @@ export const GateScannerView: React.FC<GateScannerViewProps> = ({
 }) => {
   const [manualCode, setManualCode] = useState(initialCode);
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isVideoReady, setIsVideoReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [eventType, setEventType] = useState<AttendanceEventType>('IN');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -36,14 +38,16 @@ export const GateScannerView: React.FC<GateScannerViewProps> = ({
     message: string;
     time?: string;
   } | null>(null);
+  const [detectedQR, setDetectedQR] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const scanLoopRef = useRef<number | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastScannedTimeRef = useRef<number>(0);
+  const isProcessingRef = useRef(false);
 
-  // Reproducir sonido beep agradable con Web Audio API
+  // Sonido beep
   const playBeep = useCallback((type: 'success' | 'error' = 'success') => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -51,12 +55,10 @@ export const GateScannerView: React.FC<GateScannerViewProps> = ({
       const ctx = new AudioCtx();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-
       osc.connect(gain);
       gain.connect(ctx.destination);
-
       if (type === 'success') {
-        osc.frequency.setValueAtTime(880, ctx.currentTime); // Nota A5
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
         gain.gain.setValueAtTime(0.15, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.18);
         osc.start();
@@ -69,27 +71,27 @@ export const GateScannerView: React.FC<GateScannerViewProps> = ({
         osc.stop(ctx.currentTime + 0.3);
       }
     } catch (e) {
-      console.warn('AudioContext not allowed without user interaction', e);
+      // AudioContext blocked until user interaction
     }
   }, []);
 
-  // Procesar código QR escaneado o ingresado
+  // Procesar código
   const handleProcessScan = useCallback(async (codeToScan?: string) => {
     const code = (codeToScan || manualCode).trim().toUpperCase();
-    if (!code || isProcessing) return;
+    if (!code || isProcessingRef.current) return;
 
+    isProcessingRef.current = true;
     setIsProcessing(true);
     setScanResult(null);
+    setDetectedQR(null);
 
     try {
-      // Determinar si es retraso en jornada matutina de Guatemala (después de las 7:30 AM)
       const currentHour = new Date().getHours();
       const currentMin = new Date().getMinutes();
       const isLate = eventType === 'IN' && (currentHour > 7 || (currentHour === 7 && currentMin > 30));
-
       const status: AttendanceStatus = isLate ? 'LATE' : 'ON_TIME';
-      const notes = isLate 
-        ? `Ingreso con retraso (${new Date().toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })})` 
+      const notes = isLate
+        ? `Ingreso con retraso (${new Date().toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })})`
         : eventType === 'IN' ? 'Ingreso puntual por garita' : 'Salida normal registrada';
 
       const res = await api.recordAttendanceScan({
@@ -103,132 +105,147 @@ export const GateScannerView: React.FC<GateScannerViewProps> = ({
 
       if (res.success && res.student) {
         playBeep('success');
-        confetti({
-          particleCount: 35,
-          spread: 60,
-          origin: { y: 0.7 },
+        confetti({ particleCount: 35, spread: 60, origin: { y: 0.7 } });
+        const timeStr = new Date().toLocaleTimeString('es-GT', {
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
         });
-
-        const timeStr = new Date().toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         setScanResult({
           success: true,
           student: res.student,
           message: `${eventType === 'IN' ? 'INGRESO' : 'SALIDA'} REGISTRADO EXITOSAMENTE`,
           time: timeStr,
         });
-
-        if (onScanComplete) {
-          onScanComplete(res.student);
-        }
+        if (onScanComplete) onScanComplete(res.student);
       } else {
         playBeep('error');
-        setScanResult({
-          success: false,
-          message: res.error || 'Carnet no reconocido',
-        });
+        setScanResult({ success: false, message: res.error || 'Carnet no reconocido' });
       }
     } catch (e: any) {
       playBeep('error');
-      setScanResult({
-        success: false,
-        message: e.message || 'Error al procesar el código',
-      });
+      setScanResult({ success: false, message: e.message || 'Error al procesar el código' });
     } finally {
       setIsProcessing(false);
+      isProcessingRef.current = false;
     }
-  }, [eventType, isProcessing, manualCode, onScanComplete, playBeep]);
+  }, [eventType, manualCode, onScanComplete, playBeep]);
 
-  // Bucle continuo de decodificación de frames de video con jsQR
-  const scanFrame = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current || !isCameraActive) return;
+  // Bucle de escaneo con setInterval (más estable en móvil que rAF)
+  const startScanLoop = useCallback(() => {
+    if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
 
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d', { willReadFrequently: true });
+    scanIntervalRef.current = setInterval(() => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas || video.readyState < video.HAVE_ENOUGH_DATA) return;
+      if (video.videoWidth === 0 || video.videoHeight === 0) return;
+      if (isProcessingRef.current) return;
 
-    if (video.readyState === video.HAVE_ENOUGH_DATA && context) {
-      canvas.height = video.videoHeight;
-      canvas.width = video.videoWidth;
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return;
 
-      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      // Limitar resolución a 640px para mejor rendimiento en móvil
+      const MAX_SIZE = 640;
+      const scale = Math.min(1, MAX_SIZE / Math.max(video.videoWidth, video.videoHeight));
+      canvas.width = Math.floor(video.videoWidth * scale);
+      canvas.height = Math.floor(video.videoHeight * scale);
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: 'dontInvert',
+        inversionAttempts: 'attemptBoth',
       });
 
       if (code && code.data) {
         const now = Date.now();
-        // Evitar múltiples lecturas repetidas en menos de 3.5 segundos
         if (now - lastScannedTimeRef.current > 3500) {
           lastScannedTimeRef.current = now;
+          setDetectedQR(code.data);
           setManualCode(code.data);
           handleProcessScan(code.data);
         }
       }
+    }, 250); // escanear cada 250ms
+  }, [handleProcessScan]);
+
+  const stopScanLoop = useCallback(() => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
     }
+  }, []);
 
-    scanLoopRef.current = requestAnimationFrame(scanFrame);
-  }, [handleProcessScan, isCameraActive]);
+  // Cuando el video está listo → iniciar loop
+  const handleVideoReady = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.play().catch(console.error);
+    setIsVideoReady(true);
+    startScanLoop();
+  }, [startScanLoop]);
 
-  useEffect(() => {
-    if (isCameraActive) {
-      scanLoopRef.current = requestAnimationFrame(scanFrame);
-    } else {
-      if (scanLoopRef.current) {
-        cancelAnimationFrame(scanLoopRef.current);
-        scanLoopRef.current = null;
-      }
-    }
-    return () => {
-      if (scanLoopRef.current) {
-        cancelAnimationFrame(scanLoopRef.current);
-      }
-    };
-  }, [isCameraActive, scanFrame]);
-
-  // Iniciar/Detener cámara
+  // Iniciar cámara
   const startCamera = async () => {
     setCameraError(null);
+    setIsVideoReady(false);
+    setScanResult(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 640 } },
-      });
+      // Primero intentar cámara trasera (móvil), luego cualquier cámara
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
       setIsCameraActive(true);
     } catch (err: any) {
-      console.error('Camera access error', err);
-      setCameraError('No se pudo acceder a la cámara. Revisa los permisos del navegador.');
+      console.error('Camera error:', err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setCameraError('Permiso de cámara denegado. Ve a Ajustes del navegador → Permisos → Cámara → Permitir.');
+      } else if (err.name === 'NotFoundError') {
+        setCameraError('No se encontró ninguna cámara en este dispositivo.');
+      } else {
+        setCameraError(`Error al acceder a la cámara: ${err.message}`);
+      }
       setIsCameraActive(false);
     }
   };
 
-  const stopCamera = () => {
+  const stopCamera = useCallback(() => {
+    stopScanLoop();
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
-    if (scanLoopRef.current) {
-      cancelAnimationFrame(scanLoopRef.current);
-      scanLoopRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
     setIsCameraActive(false);
-  };
+    setIsVideoReady(false);
+    setDetectedQR(null);
+  }, [stopScanLoop]);
 
   useEffect(() => {
-    return () => {
-      stopCamera();
-    };
-  }, []);
+    return () => { stopCamera(); };
+  }, [stopCamera]);
 
   return (
     <div className="space-y-4">
-      {/* Canvas invisible para decodificación de frames */}
+      {/* Canvas invisible para decodificación */}
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* Selector de Entrada / Salida */}
+      {/* Selector Entrada / Salida */}
       <div className="bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-soft flex gap-2">
         <button
           type="button"
@@ -242,7 +259,6 @@ export const GateScannerView: React.FC<GateScannerViewProps> = ({
           <LogIn className="w-4 h-4" />
           <span>Registrar ENTRADA</span>
         </button>
-
         <button
           type="button"
           onClick={() => setEventType('OUT')}
@@ -257,38 +273,59 @@ export const GateScannerView: React.FC<GateScannerViewProps> = ({
         </button>
       </div>
 
-      {/* Visor de Cámara y Láser de Escaneo Automático */}
-      <div className="relative overflow-hidden rounded-3xl bg-slate-950 aspect-4/3 sm:aspect-16/9 flex items-center justify-center border-2 border-slate-800 shadow-xl">
+      {/* Visor de Cámara */}
+      <div className="relative overflow-hidden rounded-3xl bg-slate-950 aspect-[4/3] flex items-center justify-center border-2 border-slate-800 shadow-xl">
+        {/* Video siempre en DOM para que el evento onLoadedMetadata funcione */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          onLoadedMetadata={handleVideoReady}
+          onCanPlay={handleVideoReady}
+          className={`w-full h-full object-cover ${isCameraActive ? 'block' : 'hidden'}`}
+        />
+
         {isCameraActive ? (
           <>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
-            {/* Overlay y Láser de lectura automática */}
-            <div className="absolute inset-0 flex items-center justify-center p-6 pointer-events-none">
-              <div className="relative w-48 h-48 sm:w-56 sm:h-56 border-2 border-brand-400/80 rounded-2xl shadow-scanner">
-                {/* Esquinas del visor */}
-                <div className="absolute -top-1.5 -left-1.5 w-5 h-5 border-t-4 border-l-4 border-white rounded-tl-lg" />
-                <div className="absolute -top-1.5 -right-1.5 w-5 h-5 border-t-4 border-r-4 border-white rounded-tr-lg" />
-                <div className="absolute -bottom-1.5 -left-1.5 w-5 h-5 border-b-4 border-l-4 border-white rounded-bl-lg" />
-                <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 border-b-4 border-r-4 border-white rounded-br-lg" />
-                
-                {/* Línea Láser animada */}
-                <div className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-red-500 via-brand-400 to-red-500 shadow-md animate-laser" />
+            {/* Overlay de escaneo */}
+            {isVideoReady && (
+              <div className="absolute inset-0 flex items-center justify-center p-6 pointer-events-none">
+                <div className="relative w-52 h-52 sm:w-56 sm:h-56">
+                  {/* Borde con animación */}
+                  <div className={`absolute inset-0 rounded-2xl border-2 transition-colors duration-300 ${
+                    detectedQR ? 'border-emerald-400 shadow-lg shadow-emerald-400/30' : 'border-brand-400/80'
+                  }`} />
+                  {/* Esquinas */}
+                  <div className="absolute -top-1.5 -left-1.5 w-6 h-6 border-t-4 border-l-4 border-white rounded-tl-lg" />
+                  <div className="absolute -top-1.5 -right-1.5 w-6 h-6 border-t-4 border-r-4 border-white rounded-tr-lg" />
+                  <div className="absolute -bottom-1.5 -left-1.5 w-6 h-6 border-b-4 border-l-4 border-white rounded-bl-lg" />
+                  <div className="absolute -bottom-1.5 -right-1.5 w-6 h-6 border-b-4 border-r-4 border-white rounded-br-lg" />
+                  {/* Línea láser */}
+                  <div className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-red-500 via-brand-400 to-red-500 shadow-md animate-laser" />
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Badge de detección automática activa */}
-            <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-slate-900/80 backdrop-blur-md border border-emerald-500/40 text-emerald-400 text-[10px] font-bold flex items-center gap-1.5 z-20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Detección Automática QR Activa</span>
-            </div>
+            {/* Estado de carga del video */}
+            {!isVideoReady && (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80">
+                <div className="text-center space-y-2">
+                  <Loader2 className="w-8 h-8 text-brand-400 animate-spin mx-auto" />
+                  <p className="text-xs text-slate-400">Iniciando cámara...</p>
+                </div>
+              </div>
+            )}
 
-            {/* Botón flotante para apagar cámara */}
+            {/* Badge activo */}
+            {isVideoReady && (
+              <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-slate-900/80 backdrop-blur-md border border-emerald-500/40 text-emerald-400 text-[10px] font-bold flex items-center gap-1.5 z-20">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Escaneando QR...</span>
+              </div>
+            )}
+
+            {/* Botón apagar */}
             <button
               onClick={stopCamera}
               className="absolute top-3 right-3 p-2 rounded-xl bg-slate-900/80 text-white hover:bg-slate-900 backdrop-blur-md text-xs font-semibold flex items-center gap-1.5 transition-colors z-20"
@@ -303,40 +340,40 @@ export const GateScannerView: React.FC<GateScannerViewProps> = ({
               <ScanLine className="w-8 h-8 animate-pulse" />
             </div>
             <div>
-              <p className="text-white font-bold text-sm">Escáner Óptico de Carnet Escolar</p>
+              <p className="text-white font-bold text-sm">Escáner Óptico de Carnet QR</p>
               <p className="text-xs text-slate-400 max-w-xs mx-auto mt-1">
-                Apunta la cámara al código QR del carnet físico para detección automática en tiempo real.
+                Apunta la cámara trasera al código QR del carnet para detección automática.
               </p>
             </div>
             <button
               onClick={startCamera}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-lg shadow-brand-600/30 transition-all active:scale-95"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm shadow-lg shadow-brand-600/30 transition-all active:scale-95"
             >
               <Camera className="w-4 h-4" />
-              <span>Activar Cámara Web / Móvil</span>
+              <span>Activar Cámara</span>
             </button>
             {cameraError && (
-              <p className="text-xs text-rose-400 font-medium">{cameraError}</p>
+              <div className="mt-2 px-3 py-2 rounded-xl bg-rose-950/60 border border-rose-700 text-rose-300 text-xs text-left">
+                <p className="font-bold mb-1">⚠️ Error de cámara</p>
+                <p>{cameraError}</p>
+              </div>
             )}
           </div>
         )}
       </div>
 
-      {/* Entrada Manual o Lector Láser USB */}
+      {/* Entrada Manual */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-soft space-y-3">
         <div className="flex items-center justify-between">
           <label className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
             <ScanLine className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
-            <span>Entrada Manual o Lector Láser USB</span>
+            <span>Entrada Manual / Lector USB</span>
           </label>
-          <span className="text-[10px] text-slate-400 dark:text-slate-500">Presiona Enter</span>
+          <span className="text-[10px] text-slate-400 dark:text-slate-500">Enter para registrar</span>
         </div>
 
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleProcessScan();
-          }}
+          onSubmit={(e) => { e.preventDefault(); handleProcessScan(); }}
           className="flex gap-2"
         >
           <input
@@ -344,7 +381,10 @@ export const GateScannerView: React.FC<GateScannerViewProps> = ({
             value={manualCode}
             onChange={(e) => setManualCode(e.target.value)}
             placeholder="Ej: ALU-2026-001"
-            className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 uppercase tracking-wider"
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 uppercase tracking-wider"
           />
           <button
             type="submit"
@@ -360,55 +400,36 @@ export const GateScannerView: React.FC<GateScannerViewProps> = ({
           </button>
         </form>
 
-        {/* Botones de simulación rápida con los alumnos reales */}
+        {/* Botones de prueba rápida */}
         <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
           <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
             <Sparkles className="w-3 h-3 text-amber-500" />
-            <span>Prueba Rápida de Alumnos Registrados:</span>
+            <span>Prueba Rápida:</span>
           </p>
           <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setManualCode('ALU-2026-001');
-                handleProcessScan('ALU-2026-001');
-              }}
-              className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-brand-50 dark:hover:bg-slate-700 hover:border-brand-200 dark:hover:border-slate-600 border border-slate-200 dark:border-slate-700 text-left transition-colors flex items-center gap-2"
-            >
-              <img
-                src="https://images.unsplash.com/photo-1544717305-2782549b5136?w=60&h=60&fit=crop&crop=faces"
-                alt="Mateo"
-                className="w-7 h-7 rounded-full object-cover"
-              />
-              <div className="truncate">
-                <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">Mateo Morales</p>
-                <p className="text-[10px] font-mono text-brand-600 dark:text-brand-400">ALU-2026-001</p>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setManualCode('ALU-2026-002');
-                handleProcessScan('ALU-2026-002');
-              }}
-              className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-brand-50 dark:hover:bg-slate-700 hover:border-brand-200 dark:hover:border-slate-600 border border-slate-200 dark:border-slate-700 text-left transition-colors flex items-center gap-2"
-            >
-              <img
-                src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=60&h=60&fit=crop&crop=faces"
-                alt="Sofía"
-                className="w-7 h-7 rounded-full object-cover"
-              />
-              <div className="truncate">
-                <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">Sofía Morales</p>
-                <p className="text-[10px] font-mono text-brand-600 dark:text-brand-400">ALU-2026-002</p>
-              </div>
-            </button>
+            {[
+              { code: 'ALU-2026-001', name: 'Mateo Morales', img: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=60&h=60&fit=crop&crop=faces' },
+              { code: 'ALU-2026-002', name: 'Sofía Morales', img: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=60&h=60&fit=crop&crop=faces' },
+            ].map(({ code, name, img }) => (
+              <button
+                key={code}
+                type="button"
+                disabled={isProcessing}
+                onClick={() => { setManualCode(code); handleProcessScan(code); }}
+                className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-brand-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-left transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                <img src={img} alt={name} className="w-7 h-7 rounded-full object-cover" />
+                <div className="truncate">
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{name}</p>
+                  <p className="text-[10px] font-mono text-brand-600 dark:text-brand-400">{code}</p>
+                </div>
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Tarjeta de Verificación Exitosa / Alerta */}
+      {/* Resultado del escaneo */}
       {scanResult && (
         <div
           className={`p-5 rounded-3xl border transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${
@@ -427,12 +448,8 @@ export const GateScannerView: React.FC<GateScannerViewProps> = ({
                 <AlertCircle className="w-6 h-6" />
               </div>
             )}
-
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-extrabold tracking-wide uppercase">
-                {scanResult.message}
-              </p>
-
+              <p className="text-xs font-extrabold tracking-wide uppercase">{scanResult.message}</p>
               {scanResult.student && (
                 <div className="mt-3 flex items-center gap-3 bg-white/80 dark:bg-slate-900/90 p-3 rounded-2xl border border-emerald-200/80 dark:border-emerald-700/60">
                   <img
@@ -445,10 +462,10 @@ export const GateScannerView: React.FC<GateScannerViewProps> = ({
                       {scanResult.student.first_name} {scanResult.student.last_name}
                     </h4>
                     <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                      {scanResult.student.grade_level} "Sec. {scanResult.student.section}"
+                      {scanResult.student.grade_level} · Sec. {scanResult.student.section}
                     </p>
                     <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold mt-0.5">
-                      Hora registrada: {scanResult.time}
+                      Hora: {scanResult.time}
                     </p>
                   </div>
                 </div>
