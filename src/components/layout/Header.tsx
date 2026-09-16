@@ -76,13 +76,13 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Acciones principales de cabecera: Notificaciones + Modo Oscuro + Salir + Carnet/Garita */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Botón de Notificaciones en Tiempo Real */}
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* Botón de Notificaciones */}
             {onOpenNotifications && (
               <button
                 type="button"
                 onClick={onOpenNotifications}
-                className="relative p-2 rounded-xl sm:rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 transition-all active:scale-95 shadow-xs shrink-0"
+                className="relative p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 transition-all active:scale-95 shadow-xs shrink-0"
                 title="Ver Notificaciones Escolares"
               >
                 <Bell className="w-4 h-4 text-slate-700 dark:text-slate-200" />
@@ -94,11 +94,11 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Botón Switch Modo Claro / Oscuro */}
+            {/* Botón Switch Modo Claro / Oscuro — solo sm+ */}
             <button
               type="button"
               onClick={toggleTheme}
-              className="p-2 rounded-xl sm:rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-amber-300 border border-slate-200/80 dark:border-slate-700 transition-all active:scale-95 shadow-xs shrink-0"
+              className="hidden sm:flex p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-amber-300 border border-slate-200/80 dark:border-slate-700 transition-all active:scale-95 shadow-xs shrink-0"
               title={theme === 'dark' ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
             >
               {theme === 'dark' ? (
@@ -108,11 +108,11 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
-            {/* Botón Salir / Cambiar Usuario */}
+            {/* Botón Salir — solo sm+ */}
             <button
               type="button"
               onClick={logout}
-              className="p-2 rounded-xl sm:rounded-2xl bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/40 text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 border border-slate-200/80 dark:border-slate-700 transition-all active:scale-95 shadow-xs shrink-0"
+              className="hidden sm:flex p-2 rounded-xl bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/40 text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 border border-slate-200/80 dark:border-slate-700 transition-all active:scale-95 shadow-xs shrink-0"
               title="Cerrar Sesión / Cambiar de Usuario"
             >
               <LogOut className="w-4 h-4" />
@@ -121,14 +121,14 @@ export const Header: React.FC<HeaderProps> = ({
             {role === 'STAFF' ? (
               <button
                 onClick={onOpenScanner}
-                className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl sm:rounded-2xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white text-xs font-bold shadow-md shadow-brand-500/25 transition-all active:scale-95 shrink-0"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white text-xs font-bold shadow-md shadow-brand-500/25 transition-all active:scale-95 shrink-0"
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span className="hidden sm:inline">Escanear Garita</span>
                 <span className="sm:hidden text-[11px]">Garita</span>
               </button>
             ) : role === 'TEACHER' ? (
-              <div className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl sm:rounded-2xl bg-brand-50 dark:bg-brand-950/70 border border-brand-200 dark:border-brand-800 text-brand-800 dark:text-brand-300 text-xs font-bold shrink-0">
+              <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3.5 py-1.5 rounded-xl bg-brand-50 dark:bg-brand-950/70 border border-brand-200 dark:border-brand-800 text-brand-800 dark:text-brand-300 text-xs font-bold shrink-0">
                 <BookOpen className="w-4 h-4 text-brand-600 dark:text-brand-400" />
                 <span className="hidden sm:inline">Profesor Titular</span>
                 <span className="sm:hidden text-[11px]">Docente</span>
@@ -137,7 +137,7 @@ export const Header: React.FC<HeaderProps> = ({
               selectedStudent && (
                 <button
                   onClick={onOpenIdCard}
-                  className="flex items-center gap-1 px-2.5 sm:px-3.5 py-2 rounded-xl sm:rounded-2xl bg-slate-900 hover:bg-slate-800 dark:bg-brand-600 dark:hover:bg-brand-500 text-white text-xs font-bold shadow-sm transition-all active:scale-95 group shrink-0"
+                  className="flex items-center gap-1 px-2 sm:px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-brand-600 dark:hover:bg-brand-500 text-white text-xs font-bold shadow-sm transition-all active:scale-95 group shrink-0"
                   title="Ver Carnet Escolar Oficial con Código QR"
                 >
                   <QrCode className="w-4 h-4 text-brand-400 dark:text-white group-hover:scale-110 transition-transform shrink-0" />

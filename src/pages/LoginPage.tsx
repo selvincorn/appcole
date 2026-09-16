@@ -66,7 +66,7 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-mesh flex items-center justify-center p-3 sm:p-6 selection:bg-brand-500 selection:text-white relative overflow-hidden">
+    <div className="min-h-screen bg-mesh flex items-center justify-center p-3 sm:p-6 selection:bg-brand-500 selection:text-white relative overflow-y-auto">
       {/* Luces de ambiente en segundo plano */}
       <div className="bg-mesh-blob-1 opacity-70" />
       <div className="bg-mesh-blob-2 opacity-60" />
@@ -164,6 +164,9 @@ export const LoginPage: React.FC = () => {
                   placeholder="Ej: ALU-2026-001"
                   value={studentCode}
                   onChange={e => setStudentCode(e.target.value)}
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
                   className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-mono font-bold text-sm uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all placeholder:font-sans placeholder:normal-case placeholder:text-slate-400"
                 />
               </div>
@@ -216,10 +219,12 @@ export const LoginPage: React.FC = () => {
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
-                  type="text"
+                  type="email"
                   placeholder="ej: carlos.mendez@colegio.edu.gt"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
+                  autoComplete="email"
+                  inputMode="email"
                   className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all placeholder:text-slate-400"
                 />
               </div>
