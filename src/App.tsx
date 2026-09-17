@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { ThemeProvider } from './hooks/useTheme';
 import { useStudents } from './hooks/useStudents';
+import { useNotifications } from './hooks/useNotifications';
 import { Header } from './components/layout/Header';
 import { BottomNav, ActiveTab } from './components/layout/BottomNav';
 import { AttendancePage } from './pages/AttendancePage';
@@ -25,9 +26,18 @@ const MainApp: React.FC = () => {
     currentState, 
     refreshStudentState 
   } = useStudents();
+  
+  const { unreadCount } = useNotifications();
 
-  // Tab inicial según rol
+  // Tab inicial según rol o query param
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab') as ActiveTab;
+      if (tabParam && ['attendance', 'grades', 'agenda', 'finance', 'scanner', 'settings'].includes(tabParam)) {
+        return tabParam;
+      }
+    }
     if (role === 'TEACHER') return 'grades';
     if (role === 'STAFF') return 'scanner';
     return 'attendance';
@@ -43,6 +53,23 @@ const MainApp: React.FC = () => {
       setActiveTab('attendance');
     }
   }, [role]);
+
+  // Escuchar mensajes del Service Worker al hacer clic en notificaciones Push
+  useEffect(() => {
+    const handleSWMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'NAVIGATE_TAB' && event.data.tab) {
+        setActiveTab(event.data.tab as ActiveTab);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    };
+
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSWMessage);
+      return () => {
+        navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+      };
+    }
+  }, []);
 
   const [isIdCardOpen, setIsIdCardOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -86,6 +113,7 @@ const MainApp: React.FC = () => {
           onOpenIdCard={() => setIsIdCardOpen(true)}
           onOpenScanner={() => setActiveTab('scanner')}
           onOpenNotifications={() => setIsNotificationsOpen(true)}
+          unreadCount={unreadCount}
         />
 
         {/* Contenedor central responsivo */}
@@ -151,6 +179,10 @@ const MainApp: React.FC = () => {
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
         selectedStudent={selectedStudent}
+        onNavigate={(tab) => {
+          setActiveTab(tab);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
       />
     </div>
   );
