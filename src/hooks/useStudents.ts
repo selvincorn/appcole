@@ -20,8 +20,12 @@ export const useStudents = () => {
       const data = await api.getStudentsForParent(user?.id);
       setStudents(data);
       if (data.length > 0) {
-        // Mantener el seleccionado o elegir el primero
+        const storedId = localStorage.getItem('appcole_selected_student_id');
         setSelectedStudent(prev => {
+          if (storedId) {
+            const foundStored = data.find(s => s.id === storedId);
+            if (foundStored) return foundStored;
+          }
           if (prev && data.some(s => s.id === prev.id)) {
             return prev;
           }

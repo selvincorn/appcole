@@ -11,7 +11,8 @@ import {
   QrCode, 
   ArrowRight,
   AlertCircle,
-  Smartphone
+  Smartphone,
+  CheckCircle2
 } from 'lucide-react';
 
 type LoginTab = 'carnet' | 'credentials' | 'demo';
@@ -31,18 +32,24 @@ export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  // Acceso por Carnet
+  // Acceso por Carnet Escolar
   const handleCarnetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     if (!studentCode.trim()) {
-      setErrorMessage('Ingresa el código del carnet escolar (ej: ALU-2026-001)');
+      setErrorMessage('Por favor ingresa el código del carnet escolar (ej: ALU-2026-001)');
       return;
     }
-    const res = await loginWithStudentCode(studentCode.trim());
-    if (!res.success) {
-      setErrorMessage(res.error || 'Código de carnet no encontrado');
+    setSubmitting(true);
+    try {
+      const res = await loginWithStudentCode(studentCode.trim());
+      if (!res.success) {
+        setErrorMessage(res.error || 'Código de carnet no encontrado');
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -51,12 +58,17 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     setErrorMessage(null);
     if (!email.trim()) {
-      setErrorMessage('Por favor ingresa tu correo institucional');
+      setErrorMessage('Por favor ingresa tu correo institucional o usuario');
       return;
     }
-    const res = await loginWithCredentials(email.trim(), password);
-    if (!res.success) {
-      setErrorMessage(res.error || 'Credenciales no válidas');
+    setSubmitting(true);
+    try {
+      const res = await loginWithCredentials(email.trim(), password);
+      if (!res.success) {
+        setErrorMessage(res.error || 'Credenciales no válidas');
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -65,20 +77,29 @@ export const LoginPage: React.FC = () => {
     setErrorMessage(null);
   };
 
-  return (
-    <div className="min-h-screen bg-mesh flex items-center justify-center p-3 sm:p-6 selection:bg-brand-500 selection:text-white relative overflow-y-auto">
-      {/* Luces de ambiente en segundo plano */}
-      <div className="bg-mesh-blob-1 opacity-70" />
-      <div className="bg-mesh-blob-2 opacity-60" />
-      <div className="bg-mesh-blob-3 opacity-50" />
+  const fillQuickAccount = (userEmail: string) => {
+    setEmail(userEmail);
+    setPassword('••••••••');
+    setErrorMessage(null);
+  };
 
-      <div className="w-full max-w-lg glass-card rounded-3xl p-5 sm:p-8 shadow-2xl border border-white/60 dark:border-slate-800/80 relative z-10 space-y-6">
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-3 sm:p-6 selection:bg-brand-500 selection:text-white relative overflow-x-hidden">
+      {/* Luces de ambiente en segundo plano */}
+      <div className="bg-mesh pointer-events-none">
+        <div className="bg-mesh-blob-1 opacity-70" />
+        <div className="bg-mesh-blob-2 opacity-60" />
+        <div className="bg-mesh-blob-3 opacity-50" />
+      </div>
+
+      <div className="w-full max-w-lg glass-card rounded-3xl p-5 sm:p-8 shadow-2xl border border-white/80 dark:border-slate-800/80 relative z-10 space-y-5">
+        
         {/* Cabecera Principal */}
         <div className="text-center space-y-2">
-          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-3xl bg-gradient-to-tr from-brand-700 via-brand-600 to-indigo-500 text-white flex items-center justify-center mx-auto shadow-glow-brand animate-pulse-subtle">
-            <GraduationCap className="w-8 h-8 sm:w-9 sm:h-9" />
+          <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl sm:rounded-3xl bg-gradient-to-tr from-brand-700 via-brand-600 to-indigo-500 text-white flex items-center justify-center mx-auto shadow-glow-brand animate-pulse-subtle">
+            <GraduationCap className="w-7 h-7 sm:w-9 sm:h-9" />
           </div>
-          <div className="space-y-0.5">
+          <div>
             <h1 className="text-2xl sm:text-3xl font-display font-black text-slate-900 dark:text-white tracking-tight">
               AppCole GT
             </h1>
@@ -93,40 +114,40 @@ export const LoginPage: React.FC = () => {
           <button
             type="button"
             onClick={() => { setActiveTab('carnet'); setErrorMessage(null); }}
-            className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2 px-1 rounded-xl transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
               activeTab === 'carnet'
                 ? 'bg-brand-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <QrCode className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">Carnet Hijo</span>
+            <span className="truncate text-[11px] sm:text-xs">Carnet Hijo</span>
           </button>
 
           <button
             type="button"
             onClick={() => { setActiveTab('credentials'); setErrorMessage(null); }}
-            className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2 px-1 rounded-xl transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
               activeTab === 'credentials'
                 ? 'bg-brand-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <Mail className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">Correo / Docente</span>
+            <span className="truncate text-[11px] sm:text-xs">Docente/Garita</span>
           </button>
 
           <button
             type="button"
             onClick={() => { setActiveTab('demo'); setErrorMessage(null); }}
-            className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2 px-1 rounded-xl transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
               activeTab === 'demo'
                 ? 'bg-brand-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-            <span className="truncate">1-Clic Demo</span>
+            <span className="truncate text-[11px] sm:text-xs">1-Clic Demo</span>
           </button>
         </div>
 
@@ -141,15 +162,15 @@ export const LoginPage: React.FC = () => {
         {/* 1. Formulario: Ingreso por Carnet Escolar */}
         {activeTab === 'carnet' && (
           <form onSubmit={handleCarnetSubmit} className="space-y-4">
-            <div className="p-4 rounded-2xl bg-brand-50/70 dark:bg-brand-950/40 border border-brand-200/70 dark:border-brand-800/60 space-y-2">
+            <div className="p-3.5 rounded-2xl bg-brand-50/80 dark:bg-brand-950/40 border border-brand-200/70 dark:border-brand-800/60 space-y-1.5">
               <div className="flex items-center gap-2">
                 <Smartphone className="w-4 h-4 text-brand-600 dark:text-brand-400" />
-                <span className="text-xs font-bold text-brand-900 dark:text-brand-200">
+                <span className="text-xs font-bold text-brand-950 dark:text-brand-200">
                   Acceso Fácil para Padres de Familia
                 </span>
               </div>
               <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                Ingresa con el código de carnet escolar que tiene impreso tu hijo/a para ver sus notas, asistencias y pagos al instante.
+                Ingresa con el código de carnet escolar que tiene impreso tu hijo/a para ver sus notas, asistencias y colegiaturas.
               </p>
             </div>
 
@@ -175,35 +196,51 @@ export const LoginPage: React.FC = () => {
             {/* Accesos rápidos de carnet para demostración */}
             <div className="space-y-1.5 pt-1">
               <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                Prueba con estos alumnos de ejemplo:
+                Alumnos de prueba (haz clic para auto-completar):
               </span>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => fillQuickCarnet('ALU-2026-001')}
-                  className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-brand-400 text-left transition-all text-xs"
+                  className={`p-2.5 rounded-xl border text-left transition-all text-xs ${
+                    studentCode === 'ALU-2026-001'
+                      ? 'bg-brand-50 dark:bg-brand-950/60 border-brand-400 dark:border-brand-600 ring-2 ring-brand-500/20'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-brand-400'
+                  }`}
                 >
-                  <p className="font-bold text-slate-800 dark:text-slate-200">Mateo Morales</p>
-                  <p className="font-mono text-[10px] text-brand-600 dark:text-brand-400">ALU-2026-001</p>
+                  <div className="flex items-center justify-between">
+                    <p className="font-bold text-slate-900 dark:text-white">Mateo Morales</p>
+                    {studentCode === 'ALU-2026-001' && <CheckCircle2 className="w-3.5 h-3.5 text-brand-600" />}
+                  </div>
+                  <p className="font-mono text-[10px] text-brand-600 dark:text-brand-400 font-bold">ALU-2026-001</p>
+                  <p className="text-[9px] text-slate-400">3ro Primaria A</p>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => fillQuickCarnet('ALU-2026-002')}
-                  className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-brand-400 text-left transition-all text-xs"
+                  className={`p-2.5 rounded-xl border text-left transition-all text-xs ${
+                    studentCode === 'ALU-2026-002'
+                      ? 'bg-brand-50 dark:bg-brand-950/60 border-brand-400 dark:border-brand-600 ring-2 ring-brand-500/20'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-brand-400'
+                  }`}
                 >
-                  <p className="font-bold text-slate-800 dark:text-slate-200">Sofía Morales</p>
-                  <p className="font-mono text-[10px] text-brand-600 dark:text-brand-400">ALU-2026-002</p>
+                  <div className="flex items-center justify-between">
+                    <p className="font-bold text-slate-900 dark:text-white">Sofía Morales</p>
+                    {studentCode === 'ALU-2026-002' && <CheckCircle2 className="w-3.5 h-3.5 text-brand-600" />}
+                  </div>
+                  <p className="font-mono text-[10px] text-brand-600 dark:text-brand-400 font-bold">ALU-2026-002</p>
+                  <p className="text-[9px] text-slate-400">1ro Básico B</p>
                 </button>
               </div>
             </div>
 
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-brand-600 via-brand-500 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white font-bold text-sm shadow-md shadow-brand-500/25 transition-all active:scale-95 flex items-center justify-center gap-2"
+              disabled={isLoading || submitting}
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-brand-600 via-brand-500 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white font-bold text-sm shadow-md shadow-brand-500/25 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <span>Ingresar al Portal Familiar</span>
+              <span>{submitting ? 'Verificando carnet...' : 'Ingresar al Portal Familiar'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
@@ -219,12 +256,11 @@ export const LoginPage: React.FC = () => {
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
-                  type="email"
+                  type="text"
                   placeholder="ej: carlos.mendez@colegio.edu.gt"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  autoComplete="email"
-                  inputMode="email"
+                  autoComplete="username"
                   className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all placeholder:text-slate-400"
                 />
               </div>
@@ -246,18 +282,33 @@ export const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
-              <p>💡 <strong>Cuentas demo para probar de inmediato:</strong></p>
-              <p>• Docente: <code>carlos.mendez@colegio.edu.gt</code></p>
-              <p>• Garita: <code>garita@colegio.edu.gt</code></p>
+            {/* Accesos Rápidos de prueba */}
+            <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400 space-y-1.5">
+              <p className="font-bold text-slate-700 dark:text-slate-300">💡 Cuentas para probar de inmediato:</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => fillQuickAccount('carlos.mendez@colegio.edu.gt')}
+                  className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-bold hover:bg-indigo-100"
+                >
+                  Docente (Carlos Méndez)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fillQuickAccount('garita@colegio.edu.gt')}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-100"
+                >
+                  Garita (Juan Pérez)
+                </button>
+              </div>
             </div>
 
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white font-bold text-sm shadow-md shadow-brand-500/25 transition-all active:scale-95 flex items-center justify-center gap-2"
+              disabled={isLoading || submitting}
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white font-bold text-sm shadow-md shadow-brand-500/25 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <span>Iniciar Sesión Segura</span>
+              <span>{submitting ? 'Iniciando sesión...' : 'Iniciar Sesión'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
@@ -267,7 +318,7 @@ export const LoginPage: React.FC = () => {
         {activeTab === 'demo' && (
           <div className="space-y-3">
             <p className="text-xs text-slate-600 dark:text-slate-400 text-center font-medium">
-              Selecciona un perfil preconfigurado para explorar la plataforma:
+              Selecciona un perfil preconfigurado para explorar la plataforma al instante:
             </p>
 
             {/* Tarjeta 1: Padre de Familia */}
@@ -338,7 +389,7 @@ export const LoginPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Oficial Juan Pérez • Escáner óptico de carnets
+                    Oficial Juan Pérez • Escaneo óptico de carnets
                   </p>
                 </div>
               </div>

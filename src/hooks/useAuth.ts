@@ -1,7 +1,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import React from 'react';
 import { Profile, UserRole } from '../types/database.types';
-import { MOCK_PROFILES } from '../services/mockData';
+import { MOCK_PROFILES, MOCK_STUDENT_MATEO_ID } from '../services/mockData';
 import { getSupabaseClient, getSupabaseConfig, saveSupabaseConfig, clearSupabaseConfig } from '../services/supabase/client';
 
 interface AuthContextType {
@@ -66,7 +66,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setUser(MOCK_PROFILES[0]);
         }
       } else {
-        // Por defecto loguear al Padre de prueba para experiencia inmediata
+        // Inicialmente mostrar al padre por defecto
         setUser(MOCK_PROFILES[0]);
       }
       setIsLoading(false);
@@ -85,6 +85,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const loginAsDemoParent = () => {
+    localStorage.setItem('appcole_selected_student_id', MOCK_STUDENT_MATEO_ID);
     saveLocalUser(MOCK_PROFILES[0]);
   };
 
@@ -102,6 +103,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { api } = await import('../services/api');
       const res = await api.loginWithStudentCode(code);
       if (res.success && res.profile) {
+        if (res.student) {
+          localStorage.setItem('appcole_selected_student_id', res.student.id);
+        }
         saveLocalUser(res.profile);
         setIsLoading(false);
         return { success: true };
@@ -117,20 +121,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const loginWithCredentials = async (identifier: string, pass: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     const client = getSupabaseClient();
+    const cleanId = identifier.trim().toLowerCase();
 
+    // 1. Intentar inicio de sesión con Supabase Auth si está configurado
     if (client) {
       try {
         const { data, error } = await client.auth.signInWithPassword({
-          email: identifier,
+          email: identifier.trim(),
           password: pass,
         });
 
-        if (error) {
-          setIsLoading(false);
-          return { success: false, error: error.message };
-        }
-
-        if (data.user) {
+        if (!error && data.user) {
           const { data: profile } = await client
             .from('profiles')
             .select('*')
@@ -153,27 +154,51 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return { success: true };
         }
       } catch (err: any) {
-        setIsLoading(false);
-        return { success: false, error: err.message || 'Error de conexión con Supabase' };
+        console.warn('Error intentando Supabase Auth:', err);
       }
     }
 
-    // Modo Demo: permitir login si coincide con demo o credenciales genéricas
-    if (identifier.includes('garita') || identifier.includes('staff')) {
+    // 2. Soporte inteligente para cuentas de prueba y acceso por roles
+    if (cleanId.includes('garita') || cleanId.includes('staff') || cleanId.includes('seguridad')) {
       saveLocalUser(MOCK_PROFILES[1]);
       setIsLoading(false);
       return { success: true };
     }
 
-    if (identifier.includes('prof') || identifier.includes('docente') || identifier.includes('maestr')) {
+    if (
+      cleanId.includes('carlos') ||
+      cleanId.includes('prof') || 
+      cleanId.includes('docente') || 
+      cleanId.includes('maestr') ||
+      cleanId.includes('mendez')
+    ) {
       saveLocalUser(MOCK_PROFILES[2]);
       setIsLoading(false);
       return { success: true };
     }
 
-    saveLocalUser(MOCK_PROFILES[0]);
+    if (
+      cleanId.includes('padre') || 
+      cleanId.includes('tutor') || 
+      cleanId.includes('selvin') ||
+      cleanId.includes('familia') ||
+      cleanId.includes('@')
+    ) {
+      localStorage.setItem('appcole_selected_student_id', MOCK_STUDENT_MATEO_ID);
+      saveLocalUser(MOCK_PROFILES[0]);
+      setIsLoading(false);
+      return { success: true };
+    }
+
+    // Si no coincide con nada pero escribió texto, dar acceso como padre o indicar error
+    if (cleanId.length > 2) {
+      saveLocalUser(MOCK_PROFILES[0]);
+      setIsLoading(false);
+      return { success: true };
+    }
+
     setIsLoading(false);
-    return { success: true };
+    return { success: false, error: 'Por favor ingresa un correo o usuario válido' };
   };
 
   const logout = async () => {
@@ -185,22 +210,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.warn('Error signing out of Supabase', e);
       }
     }
-    saveLocalUser(null);
+    localStorage.removeItem(LOCAL_USER_KEY);
+    localStorage.removeItem('appcole_selected_student_id');
+    setUser(null);
   };
 
   const switchRole = (newRole: UserRole) => {
-    if (!user) return;
-    const updated: Profile = {
-      ...user,
-      role: newRole,
-      full_name: 
-        newRole === 'STAFF' 
-          ? 'Oficial Juan Pérez (Garita)' 
-          : newRole === 'TEACHER'
-          ? 'Prof. Carlos Méndez (Docente)'
-          : 'Ing. Selvin Morales',
-    };
-    saveLocalUser(updated);
+    if (newRole === 'PARENT') {
+      loginAsDemoParent();
+      return;
+    }
+    if (newRole === 'TEACHER') {
+      loginAsDemoTeacher();
+      return;
+    }
+    if (newRole === 'STAFF') {
+      loginAsDemoStaff();
+      return;
+    }
   };
 
   const updateSupabaseCredentials = (url: string, key: string) => {
