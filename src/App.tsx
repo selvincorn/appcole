@@ -34,7 +34,13 @@ const MainApp: React.FC = () => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab') as ActiveTab;
-      if (tabParam && ['attendance', 'grades', 'agenda', 'finance', 'scanner', 'settings'].includes(tabParam)) {
+      if (role === 'TEACHER' && tabParam && ['grades', 'agenda', 'attendance', 'settings'].includes(tabParam)) {
+        return tabParam;
+      }
+      if (role === 'STAFF' && tabParam && ['scanner', 'attendance', 'settings'].includes(tabParam)) {
+        return tabParam;
+      }
+      if (role === 'PARENT' && tabParam && ['attendance', 'grades', 'agenda', 'finance', 'settings'].includes(tabParam)) {
         return tabParam;
       }
     }
@@ -43,16 +49,23 @@ const MainApp: React.FC = () => {
     return 'attendance';
   });
 
-  // Ajustar tab automáticamente al cambiar de rol
+  // Ajustar tab automáticamente al cambiar de rol o detectar tab no autorizada
   useEffect(() => {
     if (role === 'TEACHER') {
-      setActiveTab('grades');
+      if (!['grades', 'agenda', 'attendance', 'settings'].includes(activeTab)) {
+        setActiveTab('grades');
+      }
     } else if (role === 'STAFF') {
-      setActiveTab('scanner');
+      if (!['scanner', 'attendance', 'settings'].includes(activeTab)) {
+        setActiveTab('scanner');
+      }
     } else {
-      setActiveTab('attendance');
+      // PARENT
+      if (!['attendance', 'grades', 'agenda', 'finance', 'settings'].includes(activeTab)) {
+        setActiveTab('attendance');
+      }
     }
-  }, [role]);
+  }, [role, activeTab]);
 
   // Escuchar mensajes del Service Worker al hacer clic en notificaciones Push
   useEffect(() => {

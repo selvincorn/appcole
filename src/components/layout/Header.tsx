@@ -171,6 +171,22 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
+        {role === 'STAFF' && (
+          <div className="mt-2 pt-1.5 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between gap-2 text-xs">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">
+              Seguridad:
+            </span>
+            <div className="flex items-center gap-1.5 min-w-0 truncate">
+              <span className="font-bold text-slate-800 dark:text-slate-200 text-xs truncate">
+                Oficial Juan Pérez
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 truncate shrink-0">
+                Garita Principal • Control Activo
+              </span>
+            </div>
+          </div>
+        )}
+
         {role === 'PARENT' && students.length > 0 && (
           <div className="mt-2 pt-1.5 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between gap-2 min-w-0">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">

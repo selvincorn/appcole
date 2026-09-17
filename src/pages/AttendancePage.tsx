@@ -3,7 +3,10 @@ import { Student, StudentCurrentState } from '../types/database.types';
 import { StatusCard } from '../components/attendance/StatusCard';
 import { AttendanceTimeline } from '../components/attendance/AttendanceTimeline';
 import { GatePassModal } from '../components/attendance/GatePassModal';
+import { TeacherAttendanceView } from '../components/attendance/TeacherAttendanceView';
+import { StaffGateMonitorView } from '../components/attendance/StaffGateMonitorView';
 import { useAttendance } from '../hooks/useAttendance';
+import { useAuth } from '../hooks/useAuth';
 import { RefreshCw, QrCode, ShieldCheck } from 'lucide-react';
 
 interface AttendancePageProps {
@@ -17,11 +20,24 @@ export const AttendancePage: React.FC<AttendancePageProps> = ({
   student,
   currentState,
   onOpenIdCard,
+  onOpenScanner,
 }) => {
+  const { role } = useAuth();
   const { logs, isLoading, refresh } = useAttendance(student?.id);
   const [isGatePassOpen, setIsGatePassOpen] = useState(false);
   const [justRefreshed, setJustRefreshed] = useState(false);
 
+  // 1. Vista Exclusiva para DOCENTES: Asistencia del Aula por Sección
+  if (role === 'TEACHER') {
+    return <TeacherAttendanceView />;
+  }
+
+  // 2. Vista Exclusiva para PERSONAL DE GARITA / SEGURIDAD: Monitor de Accesos General
+  if (role === 'STAFF') {
+    return <StaffGateMonitorView onOpenScanner={onOpenScanner} />;
+  }
+
+  // 3. Vista para PADRES DE FAMILIA: Portal Familiar de sus hijos
   const handleRefresh = async () => {
     await refresh();
     setJustRefreshed(true);
