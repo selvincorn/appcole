@@ -69,7 +69,7 @@ const MainApp: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen bg-slate-50/70 dark:bg-slate-950 flex flex-col font-sans pb-36 sm:pb-32 selection:bg-brand-500 selection:text-white">
+    <div className="relative min-h-screen bg-slate-50/70 dark:bg-slate-950 flex flex-col font-sans pb-44 sm:pb-36 selection:bg-brand-500 selection:text-white">
       {/* Fondo de Malla Ambiental Animado (Ambient Glow) */}
       <div className="bg-mesh">
         <div className="bg-mesh-blob-1" />
